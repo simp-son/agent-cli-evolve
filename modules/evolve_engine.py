@@ -22,11 +22,12 @@ from typing import Optional
 log = logging.getLogger("evolve_engine")
 
 # Param definitions: (step_size, min, max)
+# Nano bounds — conservative range safe for $50 accounts
 PARAM_SPACE = {
-    "radar_score_threshold":    (10,   120,  280),
-    "pulse_confidence_threshold": (5.0, 40.0, 95.0),
-    "daily_loss_limit":         (50.0, 50.0, 5000.0),
-    "max_same_direction":       (1,    1,    3),
+    "radar_score_threshold":      (10,  160,  220),   # don't go below 160 (too noisy) or above 220 (no trades)
+    "pulse_confidence_threshold": (5.0, 60.0, 90.0),  # don't go below 60 (too noisy)
+    "daily_loss_limit":           (1.0,  5.0, 15.0),  # $5–$15 range for $50 account
+    "max_same_direction":         (1,    1,    1),     # always 1 with nano — no stacking
 }
 
 
