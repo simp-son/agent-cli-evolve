@@ -19,10 +19,81 @@ from threading import Thread
 
 import logging
 import re
+from datetime import datetime, timezone
 
 log = logging.getLogger("entrypoint")
 START_TIME = time.time()
 CHILD_PROC: subprocess.Popen | None = None
+
+
+def _run_reflect(data_dir: str) -> None:
+    """Run REFLECT and save metrics JSON for EVOLVE to read."""
+    try:
+        log.info("SCHEDULER: running REFLECT...")
+        result = subprocess.run(
+            [sys.executable, "-m", "cli.main", "reflect", "run",
+             "--data-dir", data_dir],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode == 0:
+            log.info("SCHEDULER: REFLECT complete")
+        else:
+            log.warning("SCHEDULER: REFLECT exited %d: %s", result.returncode, result.stderr[:200])
+    except Exception as e:
+        log.warning("SCHEDULER: REFLECT error: %s", e)
+
+
+def _run_evolve(data_dir: str) -> None:
+    """Run one EVOLVE cycle — backtest-backed param tuning."""
+    try:
+        log.info("SCHEDULER: running EVOLVE...")
+        # Import here so it only loads in the scheduler thread
+        _root = str(Path(__file__).parent.parent)
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from modules.evolve_engine import run as evolve_run
+        result = evolve_run(data_dir=data_dir)
+        if result is None:
+            log.info("SCHEDULER: EVOLVE — nothing to tune yet")
+        elif result.applied:
+            log.info(
+                "SCHEDULER: EVOLVE applied — %s: %s → %s (pnl: %.2f → %.2f, reason: %s)",
+                result.param, result.old_value, result.new_value,
+                result.old_net_pnl, result.new_net_pnl, result.reason,
+            )
+        else:
+            log.info(
+                "SCHEDULER: EVOLVE — baseline wins for %s, no change (%s)",
+                result.param, result.reason,
+            )
+    except Exception as e:
+        log.warning("SCHEDULER: EVOLVE error: %s", e)
+
+
+def _scheduler_loop(data_dir: str, reflect_hour: int = 4) -> None:
+    """Background thread: runs REFLECT then EVOLVE once per day."""
+    reflect_done_today: str = ""
+    evolve_done_today: str = ""
+
+    while True:
+        now = datetime.now(timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+
+        # REFLECT at reflect_hour UTC
+        if now.hour == reflect_hour and reflect_done_today != today:
+            reflect_done_today = today
+            _run_reflect(data_dir)
+
+        # EVOLVE 30 min after REFLECT
+        evolve_hour = reflect_hour
+        evolve_min = 30
+        if (now.hour == evolve_hour and now.minute >= evolve_min
+                and evolve_done_today != today
+                and reflect_done_today == today):
+            evolve_done_today = today
+            _run_evolve(data_dir)
+
+        time.sleep(60)  # check every minute
 MAX_BODY_SIZE = 1_048_576  # 1MB max POST body
 AUTH_TOKEN = os.environ.get("API_AUTH_TOKEN")
 
@@ -340,6 +411,18 @@ def main():
     health_thread = Thread(target=server.serve_forever, daemon=True)
     health_thread.start()
     log.info("Health server listening on :%d", port)
+
+    # Start REFLECT + EVOLVE scheduler in background
+    data_dir = os.environ.get("DATA_DIR", "/data")
+    reflect_hour = int(os.environ.get("REFLECT_HOUR", "4"))
+    scheduler_thread = Thread(
+        target=_scheduler_loop,
+        args=(data_dir, reflect_hour),
+        daemon=True,
+        name="reflect-evolve-scheduler",
+    )
+    scheduler_thread.start()
+    log.info("REFLECT/EVOLVE scheduler started (runs daily at %02d:00 / %02d:30 UTC)", reflect_hour, reflect_hour)
 
     # Register signal handlers
     signal.signal(signal.SIGTERM, shutdown)

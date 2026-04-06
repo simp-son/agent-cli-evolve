@@ -11,8 +11,9 @@ mountPath = "/data"
 
 [variables]
 PORT = "8080"
-HL_TESTNET = "true"
+HL_TESTNET = "false"
 APEX_PRESET = "default"
 RUN_MODE = "apex"
 INSTRUMENT = "ETH-PERP"
 DATA_DIR = "/data"
+REFLECT_HOUR = "4"
