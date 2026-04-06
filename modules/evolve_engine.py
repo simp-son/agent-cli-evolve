@@ -21,13 +21,10 @@ from typing import Optional
 
 log = logging.getLogger("evolve_engine")
 
-# Param definitions: (step_size, min, max)
-# Nano bounds — conservative range safe for $50 accounts
+# Single param, single focus.
+# step=10, min=160 (never too loose), max=220 (never too restrictive)
 PARAM_SPACE = {
-    "radar_score_threshold":      (10,  160,  220),   # don't go below 160 (too noisy) or above 220 (no trades)
-    "pulse_confidence_threshold": (5.0, 60.0, 90.0),  # don't go below 60 (too noisy)
-    "daily_loss_limit":           (2.0, 10.0, 25.0),  # $10–$25 range for $90 account
-    "max_same_direction":         (1,    1,    1),     # always 1 with nano — no stacking
+    "radar_score_threshold": (10, 160, 220),
 }
 
 
@@ -150,55 +147,18 @@ def run(data_dir: str = "/data") -> Optional[EvolveResult]:
 # ---------------------------------------------------------------------------
 
 def _pick_param(metrics: dict, config) -> tuple[Optional[str], str]:
-    """Pick the single most impactful param to tune given current metrics.
+    """Always tune radar_score_threshold — the single lever that controls
+    trade quality vs trade frequency on ETH-PERP.
 
-    Priority:
-    1. Emergency (fees > gross PnL) → radar_score_threshold
-    2. Critical FDR (>30%) → radar_score_threshold
-    3. Low win rate (<40%) → pulse_confidence_threshold
-    4. Loss streak (>=5) → daily_loss_limit
-    5. Direction imbalance → max_same_direction
-    6. Healthy → try lowering radar_score_threshold to get more trades
+    Too high = no trades, idle account.
+    Too low  = bad entries, fees eat profit.
+    EVOLVE finds the sweet spot and tracks it as market conditions shift.
     """
     total = metrics.get("total_round_trips", 0)
-    fdr = metrics.get("fdr", 0.0)
-    win_rate = metrics.get("win_rate", 0.0)
-    net_pnl = metrics.get("net_pnl", 0.0)
-    gross_pnl = metrics.get("gross_pnl", 0.0)
-    total_fees = metrics.get("total_fees", 0.0)
-    consec_losses = metrics.get("max_consecutive_losses", 0)
-    long_pnl = metrics.get("long_pnl", 0.0)
-    short_pnl = metrics.get("short_pnl", 0.0)
+    if total < 5:
+        return None, "need 5+ round trips before tuning"
 
-    # Emergency
-    if total >= 3 and total_fees > abs(gross_pnl):
-        return "radar_score_threshold", "EMERGENCY: fees exceed gross PnL"
-
-    # Critical FDR
-    if fdr > 30:
-        return "radar_score_threshold", f"FDR critical ({fdr:.1f}%): filter low-quality entries"
-
-    # Low win rate
-    if win_rate < 40 and total >= 5:
-        return "pulse_confidence_threshold", f"Win rate low ({win_rate:.1f}%): require higher conviction"
-
-    # Loss streak
-    if consec_losses >= 5:
-        return "daily_loss_limit", f"Loss streak ({consec_losses}): reduce daily limit"
-
-    # Direction imbalance
-    if long_pnl < 0 and short_pnl > 0 and metrics.get("long_count", 0) >= 3:
-        return "max_same_direction", "Long bias losing: limit same-direction slots"
-    if short_pnl < 0 and long_pnl > 0 and metrics.get("short_count", 0) >= 3:
-        return "max_same_direction", "Short bias losing: limit same-direction slots"
-
-    # Healthy — try to open up more trades
-    if win_rate >= 50 and net_pnl > 0 and fdr < 15 and total >= 5:
-        cur_threshold = getattr(config, "radar_score_threshold", 170)
-        if cur_threshold >= 140:
-            return "radar_score_threshold", f"Healthy strategy: try lowering radar threshold to capture more trades"
-
-    return None, "no clear direction from metrics"
+    return "radar_score_threshold", "always tuning radar_score_threshold"
 
 
 def _backtest_variant(config, param: str, value, trades_path: Path) -> Optional[float]:
