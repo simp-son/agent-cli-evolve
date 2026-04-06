@@ -21,10 +21,19 @@ from typing import Optional
 
 log = logging.getLogger("evolve_engine")
 
-# Single param, single focus.
-# step=10, min=160 (never too loose), max=220 (never too restrictive)
+# Param rotation — one param per week, in order.
+# If the week's net_pnl doesn't improve, rotate to next param.
+PARAM_ROTATION = [
+    "radar_score_threshold",
+    "pulse_confidence_threshold",
+    "daily_loss_limit",
+]
+
+# (step_size, min, max) per param
 PARAM_SPACE = {
-    "radar_score_threshold": (10, 160, 220),
+    "radar_score_threshold":      (10,  160, 220),
+    "pulse_confidence_threshold": (5.0, 60.0, 90.0),
+    "daily_loss_limit":           (2.0, 10.0, 25.0),
 }
 
 
@@ -68,7 +77,7 @@ def run(data_dir: str = "/data") -> Optional[EvolveResult]:
     current_config = _load_config(config_override_path)
 
     # --- Step 3: Pick ONE param to tune ---
-    param, reason = _pick_param(metrics, current_config)
+    param, reason = _pick_param(metrics, current_config, evolve_dir)
     if param is None:
         log.info("EVOLVE: no param to tune right now (%s)", reason)
         return None
@@ -146,19 +155,65 @@ def run(data_dir: str = "/data") -> Optional[EvolveResult]:
 # Internals
 # ---------------------------------------------------------------------------
 
-def _pick_param(metrics: dict, config) -> tuple[Optional[str], str]:
-    """Always tune radar_score_threshold — the single lever that controls
-    trade quality vs trade frequency on ETH-PERP.
+def _pick_param(metrics: dict, config, evolve_dir: Path) -> tuple[Optional[str], str]:
+    """Pick param based on weekly rotation state.
 
-    Too high = no trades, idle account.
-    Too low  = bad entries, fees eat profit.
-    EVOLVE finds the sweet spot and tracks it as market conditions shift.
+    Tunes the current week's param every day.
+    At the end of each week (7 daily cycles), checks if net_pnl improved.
+    If yes → stay on same param next week.
+    If no → rotate to next param in PARAM_ROTATION.
     """
     total = metrics.get("total_round_trips", 0)
     if total < 5:
         return None, "need 5+ round trips before tuning"
 
-    return "radar_score_threshold", "always tuning radar_score_threshold"
+    state = _load_weekly_state(evolve_dir)
+    current_param = state.get("current_param", PARAM_ROTATION[0])
+    week_start_pnl = state.get("week_start_pnl", metrics.get("net_pnl", 0.0))
+    days_on_param = state.get("days_on_param", 0)
+
+    # End of week — evaluate and maybe rotate
+    if days_on_param >= 7:
+        current_pnl = metrics.get("net_pnl", 0.0)
+        improved = current_pnl > week_start_pnl
+
+        if improved:
+            # Keep same param, reset week
+            reason = f"week improved (${current_pnl:.2f} vs ${week_start_pnl:.2f}) — continuing {current_param}"
+            _save_weekly_state(evolve_dir, current_param, current_pnl, 0)
+        else:
+            # Rotate to next param
+            idx = PARAM_ROTATION.index(current_param) if current_param in PARAM_ROTATION else 0
+            next_param = PARAM_ROTATION[(idx + 1) % len(PARAM_ROTATION)]
+            reason = f"week flat/negative (${current_pnl:.2f} vs ${week_start_pnl:.2f}) — rotating to {next_param}"
+            current_param = next_param
+            _save_weekly_state(evolve_dir, current_param, current_pnl, 0)
+    else:
+        # Mid-week — increment day count, keep tuning
+        _save_weekly_state(evolve_dir, current_param, week_start_pnl, days_on_param + 1)
+        reason = f"day {days_on_param + 1}/7 on {current_param}"
+
+    return current_param, reason
+
+
+def _load_weekly_state(evolve_dir: Path) -> dict:
+    state_path = evolve_dir / "weekly_state.json"
+    if state_path.exists():
+        try:
+            return json.loads(state_path.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_weekly_state(evolve_dir: Path, param: str, week_start_pnl: float, days: int) -> None:
+    state_path = evolve_dir / "weekly_state.json"
+    state_path.write_text(json.dumps({
+        "current_param": param,
+        "week_start_pnl": week_start_pnl,
+        "days_on_param": days,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, indent=2))
 
 
 def _backtest_variant(config, param: str, value, trades_path: Path) -> Optional[float]:
