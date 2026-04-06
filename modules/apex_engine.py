@@ -209,15 +209,31 @@ class ApexEngine:
         candidates: List[Dict[str, Any]] = []
 
         # Priority 1: Pulse IMMEDIATE signals
+        # Includes IMMEDIATE_MOVER (signal_type) + FIRST_JUMP (tier=1) + CONTRIB_EXPLOSION (tier=2)
+        # FIRST_JUMP = first asset in sector to break out — rare, high conviction
+        # CONTRIB_EXPLOSION = extreme OI AND volume simultaneously — auto-enter
         for sig in pulse_signals:
-            if sig.get("signal_type") == "IMMEDIATE_MOVER" and cfg.pulse_immediate_auto_entry:
+            is_immediate = sig.get("signal_type") == "IMMEDIATE_MOVER"
+            is_first_jump = sig.get("signal_tier") == 1
+            is_contrib_explosion = sig.get("signal_tier") == 2
+            if (is_immediate or is_first_jump or is_contrib_explosion) and cfg.pulse_immediate_auto_entry:
+                tier = sig.get("signal_tier", 0)
+                source = (
+                    "pulse_first_jump" if is_first_jump else
+                    "pulse_contrib_explosion" if is_contrib_explosion else
+                    "pulse_immediate"
+                )
+                # FIRST_JUMP is highest conviction — priority 0.5 (above everything)
+                # CONTRIB_EXPLOSION — priority 0.75
+                # IMMEDIATE_MOVER — priority 1 (unchanged)
+                priority = 0.5 if is_first_jump else 0.75 if is_contrib_explosion else 1
                 instrument = asset_to_instrument(sig["asset"])
                 candidates.append({
                     "instrument": instrument,
                     "direction": sig.get("direction", "LONG").lower(),
-                    "source": "pulse_immediate",
+                    "source": source,
                     "score": sig.get("confidence", 100),
-                    "priority": 1,
+                    "priority": priority,
                 })
 
         # Priority 1.5: Smart money signals (HIGH_CONVICTION) / 2.5 (SMART_MONEY)
@@ -256,9 +272,34 @@ class ApexEngine:
                     "priority": 2.25,
                 })
 
-        # Priority 3: Pulse other signals
+        # Priority 2.5: NEW_ENTRY_DEEP (tier=4) — smart money accumulation, low volume
+        # Priority 2.75: DEEP_CLIMBER (tier=5) — sustained OI climb 3+ windows
+        # Both bypass pulse_confidence_threshold — they're structural signals not noise
         for sig in pulse_signals:
-            if sig.get("signal_type") != "IMMEDIATE_MOVER":
+            tier = sig.get("signal_tier", 0)
+            if tier == 4:  # NEW_ENTRY_DEEP
+                instrument = asset_to_instrument(sig["asset"])
+                candidates.append({
+                    "instrument": instrument,
+                    "direction": sig.get("direction", "LONG").lower(),
+                    "source": "pulse_new_entry_deep",
+                    "score": sig.get("confidence", 60),
+                    "priority": 2.5,
+                })
+            elif tier == 5:  # DEEP_CLIMBER
+                instrument = asset_to_instrument(sig["asset"])
+                candidates.append({
+                    "instrument": instrument,
+                    "direction": sig.get("direction", "LONG").lower(),
+                    "source": "pulse_deep_climber",
+                    "score": sig.get("confidence", 60),
+                    "priority": 2.75,
+                })
+
+        # Priority 3: Pulse other signals (confidence gated)
+        for sig in pulse_signals:
+            tier = sig.get("signal_tier", 0)
+            if sig.get("signal_type") != "IMMEDIATE_MOVER" and tier not in (1, 2, 4, 5):
                 if sig.get("confidence", 0) >= cfg.pulse_confidence_threshold:
                     instrument = asset_to_instrument(sig["asset"])
                     candidates.append({
