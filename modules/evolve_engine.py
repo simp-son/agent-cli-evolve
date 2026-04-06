@@ -26,7 +26,7 @@ log = logging.getLogger("evolve_engine")
 PARAM_SPACE = {
     "radar_score_threshold":      (10,  160,  220),   # don't go below 160 (too noisy) or above 220 (no trades)
     "pulse_confidence_threshold": (5.0, 60.0, 90.0),  # don't go below 60 (too noisy)
-    "daily_loss_limit":           (1.0,  5.0, 15.0),  # $5–$15 range for $50 account
+    "daily_loss_limit":           (1.0,  3.0,  8.0),  # $3–$8 range for $20 allocation
     "max_same_direction":         (1,    1,    1),     # always 1 with nano — no stacking
 }
 

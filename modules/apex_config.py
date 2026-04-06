@@ -148,14 +148,15 @@ APEX_PRESETS: Dict[str, ApexConfig] = {
         pulse_confidence_threshold=60.0,
         daily_loss_limit=1000.0,
     ),
-    # $50 account — one market, tight risk, low leverage
+    # $50 shared account — BTC already running on original service
+    # This service gets $20 allocation, leaving $25 for BTC + $5 buffer
     "nano": ApexConfig(
-        total_budget=45.0,       # $45 active, $5 buffer for fees
+        total_budget=20.0,       # $20 allocation (BTC service gets $25, $5 buffer)
         max_slots=1,             # one position at a time
-        leverage=5.0,            # $225 notional max — 10% move = $22.50 loss
-        radar_score_threshold=180,  # slightly tighter than default — quality over quantity
+        leverage=5.0,            # $100 notional max — manageable on ETH
+        radar_score_threshold=180,
         pulse_confidence_threshold=70.0,
-        daily_loss_limit=8.0,   # hard stop at $8/day (16% of account)
+        daily_loss_limit=5.0,    # hard stop at $5/day (25% of $20 allocation)
         max_same_direction=1,
         guard_preset="tight",
     ),
