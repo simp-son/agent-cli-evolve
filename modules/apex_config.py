@@ -148,15 +148,14 @@ APEX_PRESETS: Dict[str, ApexConfig] = {
         pulse_confidence_threshold=60.0,
         daily_loss_limit=1000.0,
     ),
-    # $50 shared account — BTC already running on original service
-    # This service gets $20 allocation, leaving $25 for BTC + $5 buffer
+    # $90 standalone account — ETH-PERP only, evolve-enabled
     "nano": ApexConfig(
-        total_budget=20.0,       # $20 allocation (BTC service gets $25, $5 buffer)
+        total_budget=85.0,       # $85 active, $5 buffer for fees
         max_slots=1,             # one position at a time
-        leverage=5.0,            # $100 notional max — manageable on ETH
+        leverage=5.0,            # $425 notional — ETH at $2k = ~0.21 ETH per position
         radar_score_threshold=180,
         pulse_confidence_threshold=70.0,
-        daily_loss_limit=5.0,    # hard stop at $5/day (25% of $20 allocation)
+        daily_loss_limit=15.0,   # hard stop at $15/day (~17% of account)
         max_same_direction=1,
         guard_preset="tight",
     ),
