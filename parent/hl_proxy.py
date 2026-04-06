@@ -272,14 +272,12 @@ class HLProxy:
         _patch_spot_meta_indexing()
 
         base_url = constants.TESTNET_API_URL if self.testnet else constants.MAINNET_API_URL
-        perp_dexs = [""] + list(HIP3_DEXS.keys())
-        try:
-            self._info = Info(base_url, skip_ws=True, timeout=10, perp_dexs=perp_dexs)
-        except KeyError:
-            # SDK doesn't know about custom DEXs (e.g. yex) — fall back to standard HL only
-            log.warning("SDK perp_dex offset missing for custom DEX — falling back to standard HL")
+        # YEX is testnet only — mainnet uses standard HL perps only
+        if self.testnet:
+            perp_dexs = [""] + list(HIP3_DEXS.keys())
+        else:
             perp_dexs = [""]
-            self._info = Info(base_url, skip_ws=True, timeout=10, perp_dexs=perp_dexs)
+        self._info = Info(base_url, skip_ws=True, timeout=10, perp_dexs=perp_dexs)
 
         account = Account.from_key(self.private_key)
         delegated = self._account_address

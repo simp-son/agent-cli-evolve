@@ -148,15 +148,16 @@ APEX_PRESETS: Dict[str, ApexConfig] = {
         pulse_confidence_threshold=60.0,
         daily_loss_limit=1000.0,
     ),
-    # $90 standalone account — ETH-PERP only, evolve-enabled
+    # $90 standalone account — BTC-PERP only, evolve-enabled
     "nano": ApexConfig(
-        total_budget=85.0,       # $85 active, $5 buffer for fees
-        max_slots=1,             # one position at a time
-        leverage=5.0,            # $425 notional — ETH at $2k = ~0.21 ETH per position
+        total_budget=85.0,           # $85 active, $5 buffer for fees
+        max_slots=1,                 # one position at a time
+        leverage=5.0,                # $425 notional on BTC
         radar_score_threshold=180,
         pulse_confidence_threshold=70.0,
-        daily_loss_limit=15.0,   # hard stop at $15/day (~17% of account)
+        daily_loss_limit=15.0,       # hard stop at $15/day (~17% of account)
         max_same_direction=1,
         guard_preset="tight",
+        allowed_instruments=["BTC-PERP"],  # mainnet — BTC only
     ),
 }
