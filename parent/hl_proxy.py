@@ -291,8 +291,8 @@ class HLProxy:
             self._exchange = Exchange(account, base_url, perp_dexs=perp_dexs)
             log.info("HL client initialized: %s (testnet=%s)", self._address, self.testnet)
 
-        # Enable HIP-3 DEX abstraction for agent trading
-        if HIP3_DEXS:
+        # Enable HIP-3 DEX abstraction for agent trading (testnet only — YEX is testnet)
+        if HIP3_DEXS and self.testnet:
             try:
                 self._exchange.agent_enable_dex_abstraction()
                 log.info("HIP-3 DEX abstraction enabled")
