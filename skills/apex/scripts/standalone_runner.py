@@ -251,6 +251,26 @@ class ApexRunner:
         except Exception as e:
             log.warning("Preflight balance check failed: %s (continuing anyway)", e)
 
+    def _approve_builder_fee(self) -> None:
+        """Auto-approve builder fee on HL so orders with fees aren't rejected."""
+        if not self.builder:
+            return
+        try:
+            from cli.builder_fee import BuilderFeeConfig
+            cfg = BuilderFeeConfig()
+            if not cfg.enabled:
+                return
+            exchange = getattr(self.hl, "_exchange", None)
+            if exchange is None:
+                exchange = getattr(getattr(self.hl, "_hl", None), "_exchange", None)
+            if exchange is None:
+                return
+            result = exchange.approve_builder_fee(
+                cfg.builder_address, cfg.max_fee_rate_str)
+            log.info("Builder fee approved: %s (%s)", cfg.builder_address, result)
+        except Exception as e:
+            log.warning("Builder fee approval failed (orders may reject): %s", e)
+
     def run(self, max_ticks: int = 0) -> None:
         """Main loop. Blocks until max_ticks reached or SIGINT."""
         self._running = True
@@ -258,6 +278,7 @@ class ApexRunner:
         signal.signal(signal.SIGTERM, self._handle_shutdown)
 
         self._preflight_check()
+        self._approve_builder_fee()
 
         # Register with telemetry service
         if self.telemetry:
@@ -887,6 +908,10 @@ class ApexRunner:
 
             size = (self.config.margin_per_slot * self.config.leverage) / mid
             side = "buy" if action.direction == "long" else "sell"
+
+            # Set exchange-level leverage to match config before entry
+            if hasattr(self.hl, "set_leverage"):
+                self.hl.set_leverage(int(self.config.leverage), coin)
 
             # Entry order type: directional strategies use IOC (need immediate fills
             # on fast-moving assets), pulse/radar use configured default (ALO for rebates)
