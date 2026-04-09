@@ -22,13 +22,13 @@ class ApexConfig:
     pulse_confidence_threshold: float = 70.0
 
     # Exit parameters
-    conviction_collapse_minutes: int = 30
+    conviction_collapse_minutes: int = 45
     stagnation_minutes: int = 60
     stagnation_min_roe: float = 3.0
     max_negative_roe: float = -5.0
 
     # Rotation cooldown
-    min_hold_ms: int = 2_700_000       # 45 min — blocks conviction/stagnation exits
+    min_hold_ms: int = 900_000          # 15 min — blocks conviction/stagnation exits
     slot_cooldown_ms: int = 300_000    # 5 min — prevents slot reuse after close
 
     # Risk
