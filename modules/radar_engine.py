@@ -135,13 +135,21 @@ class OpportunityRadarEngine:
         if ema5 and ema13 and ema13[-1] != 0:
             diff_pct = (ema5[-1] - ema13[-1]) / ema13[-1] * 100
 
-        # 1h change
+        # 1h change (last candle)
         closes_1h = [float(c["c"]) for c in btc_1h]
         chg1h = 0.0
         if len(closes_1h) >= 2 and closes_1h[-2] != 0:
             chg1h = (closes_1h[-1] - closes_1h[-2]) / closes_1h[-2] * 100
 
-        # Classify
+        # 4h change from recent 1h candles (last 4 candles)
+        chg4h = 0.0
+        if len(closes_1h) >= 5 and closes_1h[-5] != 0:
+            chg4h = (closes_1h[-1] - closes_1h[-5]) / closes_1h[-5] * 100
+
+        # Structural 1h trend for deterioration check
+        hourly_trend = classify_hourly_trend(btc_1h)
+
+        # Classify base trend from 4h EMAs
         if diff_pct > 1.0:
             trend = "strong_up"
         elif diff_pct > 0.2:
@@ -153,16 +161,28 @@ class OpportunityRadarEngine:
         else:
             trend = "neutral"
 
+        # Short-term deterioration override: if 4h EMAs say bullish but
+        # structural 1h trend is not UP and recent 4h price change is
+        # negative, downgrade macro to neutral so stale uptrend doesn't
+        # keep boosting longs into a declining market
+        effective_trend = trend
+        if trend in ("up", "strong_up") and chg4h < 0 and hourly_trend != "UP":
+            effective_trend = "neutral"
+        elif trend in ("down", "strong_down") and chg4h > 0 and hourly_trend != "DOWN":
+            effective_trend = "neutral"
+
         strength = min(int(abs(diff_pct) * 20), 100)
 
         return {
             "trend": trend,
+            "effective_trend": effective_trend,
             "strength": strength,
             "ema5": round(ema5[-1], 2) if ema5 else 0,
             "ema13": round(ema13[-1], 2) if ema13 else 0,
             "diff_pct": round(diff_pct, 3),
             "chg1h": round(chg1h, 3),
-            "modifiers": self.config.macro_modifiers.get(trend, {}),
+            "chg4h": round(chg4h, 3),
+            "modifiers": self.config.macro_modifiers.get(effective_trend, {}),
         }
 
     def _bulk_screen(self, all_markets: list) -> List[AssetMeta]:

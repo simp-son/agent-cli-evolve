@@ -46,9 +46,9 @@ class GuardConfig:
     phase1_retrace: float = 0.03        # 3% retrace from high water
     phase1_max_breaches: int = 3        # Consecutive breaches before close
     phase1_absolute_floor: float = 0.0  # Hard price floor (0 = disabled)
-    phase1_max_duration_ms: int = 5_400_000   # 90 min max in Phase 1 (0 = disabled)
-    phase1_weak_peak_ms: int = 2_700_000      # 45 min weak-peak check (0 = disabled)
-    phase1_weak_peak_min_roe: float = 3.0     # Min peak ROE% to survive weak-peak check
+    phase1_max_duration_ms: int = 10_800_000   # 180 min max in Phase 1 (0 = disabled)
+    phase1_weak_peak_ms: int = 5_400_000      # 90 min weak-peak check (0 = disabled)
+    phase1_weak_peak_min_roe: float = 1.5     # Min peak ROE% to survive weak-peak check
 
     # Phase 2: "Lock the bag"
     phase2_retrace: float = 0.015       # 1.5% default retrace

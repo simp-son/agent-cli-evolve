@@ -152,7 +152,7 @@ APEX_PRESETS: Dict[str, ApexConfig] = {
     "nano": ApexConfig(
         total_budget=85.0,           # $85 active, $5 buffer for fees
         max_slots=1,                 # one position at a time
-        leverage=5.0,                # $425 notional on BTC
+        leverage=10.0,               # $850 notional on BTC
         radar_score_threshold=180,
         pulse_confidence_threshold=70.0,
         daily_loss_limit=15.0,       # hard stop at $15/day (~17% of account)

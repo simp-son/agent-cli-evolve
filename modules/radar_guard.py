@@ -55,6 +55,9 @@ class RadarGuard:
 
         # Log summary
         stats = result.stats
+        btc_trend = result.btc_macro.get("trend", "?")
+        effective = result.btc_macro.get("effective_trend", btc_trend)
+        trend_label = btc_trend if btc_trend == effective else f"{btc_trend}→{effective}"
         log.info(
             "Scan complete: %d assets → %d stage1 → %d deep → %d qualified "
             "(%.1fs, BTC %s)",
@@ -63,7 +66,7 @@ class RadarGuard:
             stats.get("deep_dived", 0),
             stats.get("qualified", 0),
             stats.get("scan_duration_ms", 0) / 1000,
-            result.btc_macro.get("trend", "?"),
+            trend_label,
         )
 
         for opp in result.opportunities[:5]:
