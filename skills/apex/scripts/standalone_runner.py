@@ -1034,6 +1034,22 @@ class ApexRunner:
         self.state.daily_pnl += pnl
         self.state.total_pnl += pnl
 
+        # Track consecutive losses and trigger cooldown
+        if pnl < 0:
+            self.state.consecutive_losses += 1
+            if self.state.consecutive_losses >= self.config.cooldown_trigger_losses:
+                now_ms = int(time.time() * 1000)
+                self.state.cooldown_until_ms = (
+                    now_ms + self.config.cooldown_duration_ms)
+                log.warning(
+                    "LOSS COOLDOWN: %d consecutive losses, "
+                    "blocking entries for %d min",
+                    self.state.consecutive_losses,
+                    self.config.cooldown_duration_ms // 60_000)
+        else:
+            self.state.consecutive_losses = 0
+            self.state.cooldown_until_ms = 0
+
         if self.state.daily_pnl <= -self.config.daily_loss_limit:
             self.state.daily_loss_triggered = True
             log.warning("DAILY LOSS LIMIT triggered: $%.2f", self.state.daily_pnl)
