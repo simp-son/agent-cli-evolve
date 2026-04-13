@@ -55,7 +55,10 @@ def run(data_dir: str = "/data") -> Optional[EvolveResult]:
     trades_path = data_path / "cli" / "trades.jsonl"
     evolve_dir = data_path / "evolve"
     evolve_dir.mkdir(parents=True, exist_ok=True)
-    config_override_path = evolve_dir / "apex_config.json"
+    # Write config override where the runner reads it
+    apex_dir = data_path / "apex"
+    apex_dir.mkdir(parents=True, exist_ok=True)
+    config_override_path = apex_dir / "config-override.json"
 
     # --- Step 1: Load REFLECT metrics ---
     metrics = _load_latest_reflect_metrics(data_path)
